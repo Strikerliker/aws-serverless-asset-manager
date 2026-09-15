@@ -1,0 +1,90 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: AWS Serverless Asset Manager CRUD API
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 10
+    MemorySize: 256
+    Tracing: Active
+
+Resources:
+  AssetsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: asset_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: asset_id
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+  AssetApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowMethods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+        AllowHeaders: [Content-Type, Authorization]
+        AllowOrigins: ['*']
+
+  AssetFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: src.app.lambda_handler
+      Environment:
+        Variables:
+          ASSETS_TABLE: !Ref AssetsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AssetsTable
+      Events:
+        CreateAsset:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AssetApi
+            Path: /assets
+            Method: POST
+        ListAssets:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AssetApi
+            Path: /assets
+            Method: GET
+        GetAsset:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AssetApi
+            Path: /assets/{asset_id}
+            Method: GET
+        UpdateAsset:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AssetApi
+            Path: /assets/{asset_id}
+            Method: PUT
+        PatchAsset:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AssetApi
+            Path: /assets/{asset_id}
+            Method: PATCH
+        DeleteAsset:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref AssetApi
+            Path: /assets/{asset_id}
+            Method: DELETE
+
+Outputs:
+  ApiUrl:
+    Description: Asset Manager API endpoint
+    Value: !Sub 'https://${AssetApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}'
+  TableName:
+    Value: !Ref AssetsTable
